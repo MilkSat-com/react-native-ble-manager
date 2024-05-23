@@ -24,6 +24,7 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
     private var writeQueue: Array<Any>
     private var notificationCallbacks: Dictionary<String, [RCTResponseSenderBlock]>
     private var stopNotificationCallbacks: Dictionary<String, [RCTResponseSenderBlock]>
+    private var bufferedCharacteristics: Dictionary<String, NotifyBufferContainer>
     
     private var connectedPeripherals: Set<String>
     
@@ -48,6 +49,7 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
         writeQueue = []
         notificationCallbacks = [:]
         stopNotificationCallbacks = [:]
+        bufferedCharacteristics = [:]
         retrieveServicesLatches = [:]
         characteristicsLatches = [:]
         exactAdvertisingName = []
@@ -58,8 +60,7 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
         NSLog("BleManager created");
         
         BleManager.shared = self
-        
-        
+
         NotificationCenter.default.addObserver(self, selector: #selector(bridgeReloading), name: NSNotification.Name(rawValue: "RCTBridgeWillReloadNotification"), object: nil)
     }
     
@@ -666,6 +667,16 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
                                  callback: @escaping RCTResponseSenderBlock) {
         NSLog("startNotification")
         
+        startNotificationUseBuffer(peripheralUUID, serviceUUID: serviceUUID, characteristicUUID: characteristicUUID, buffer: 1, callback: callback)
+    }
+
+    @objc func startNotificationUseBuffer(_ peripheralUUID: String,
+                                 serviceUUID: String,
+                                 characteristicUUID: String,
+                                 buffer: Int,
+                                 callback: @escaping RCTResponseSenderBlock) {
+        NSLog("startNotificationUseBuffer")
+        
         guard let context = getContext(peripheralUUID, serviceUUIDString: serviceUUID, characteristicUUIDString: characteristicUUID, prop: CBCharacteristicProperties.notify, callback: callback) else {
             return
         }
@@ -675,10 +686,19 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
         
         let key = Helper.key(forPeripheral: (peripheral.instance as CBPeripheral?)!, andCharacteristic: characteristic)
         insertCallback(callback, intoDictionary: &notificationCallbacks, withKey: key)
-        
+
+        let bufferKey = bufferedCharacteristicsKey(serviceUUID: serviceUUID, characteristicUUID: characteristicUUID)
+        if (buffer > 1) {
+            NSLog("using buffer \(buffer)")  
+            bufferedCharacteristics[bufferKey] = NotifyBufferContainer(bufferSize: buffer)
+        } else {
+            NSLog("not using buffer")
+            bufferedCharacteristics.removeValue(forKey: bufferKey)
+        }
+
         peripheral.instance.setNotifyValue(true, for: characteristic)
     }
-    
+
     @objc func stopNotification(_ peripheralUUID: String,
                                 serviceUUID: String,
                                 characteristicUUID: String,
@@ -736,7 +756,15 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
             callback(["Peripheral not found or not connected"])
         }
     }
-    
+
+    private func bufferedCharacteristicsKey(serviceUUID: String, characteristicUUID: String) -> String {
+        return "\(serviceUUID.lowercased())-\(characteristicUUID.lowercased())"
+    }
+
+    private func clearBuffers() {       
+        bufferedCharacteristics.removeAll()
+    }
+
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
         if let restoredPeripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral], restoredPeripherals.count > 0 {
             serialQueue.sync {
@@ -801,8 +829,8 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
         invokeAndClearDictionary(&connectCallbacks, withKey: peripheralUUIDString, usingParameters: [errorStr])
         invokeAndClearDictionary(&readRSSICallbacks, withKey: peripheralUUIDString, usingParameters: [errorStr])
         invokeAndClearDictionary(&retrieveServicesCallbacks, withKey: peripheralUUIDString, usingParameters: [errorStr])
-        
-        
+
+
         for key in readCallbacks.keys {
             if let keyString = key as String?, keyString.hasPrefix(peripheralUUIDString) {
                 invokeAndClearDictionary(&readCallbacks, withKey: key, usingParameters: [errorStr])
@@ -832,6 +860,8 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
                 invokeAndClearDictionary(&stopNotificationCallbacks, withKey: key, usingParameters: [errorStr])
             }
         }
+
+        clearBuffers();
         
         if hasListeners {
             connectedPeripherals.remove(peripheralUUIDString)
@@ -1082,12 +1112,42 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
             invokeAndClearDictionary(&readCallbacks, withKey: key, usingParameters: [NSNull(), characteristic.value!.toArray()])
         } else {
             if hasListeners {
-                sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
-                    "peripheral": peripheral.uuidAsString(),
-                    "characteristic": characteristic.uuid.uuidString.lowercased(),
-                    "service": characteristic.service!.uuid.uuidString.lowercased(),
-                    "value": characteristic.value!.toArray()
-                ])
+                var buffer = bufferedCharacteristics[bufferedCharacteristicsKey(serviceUUID: characteristic.service!.uuid.uuidString, characteristicUUID: characteristic.uuid.uuidString)]
+                var dataValue = characteristic.value!.toArray()
+                if var dataValue = dataValue { 
+                    if (buffer == nil) {
+                        sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
+                                "peripheral": peripheral.uuidAsString(),
+                                "characteristic": characteristic.uuid.uuidString.lowercased(),
+                                "service": characteristic.service!.uuid.uuidString.lowercased(),
+                                "value": dataValue
+                            ])                    
+                    } else {
+                        while !dataValue.isEmpty {  
+                            var rest: Data = Data()
+
+                            if (buffer != nil) {
+                                rest = buffer.put(dataValue)
+                                if buffer.isBufferFull() {
+                                    // fetch and reset
+                                    dataValue = buffer.items
+                                    buffer.resetBuffer()
+                                } else {
+                                    break
+                                }
+                            }
+
+                            sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
+                                "peripheral": peripheral.uuidAsString(),
+                                "characteristic": characteristic.uuid.uuidString.lowercased(),
+                                "service": characteristic.service!.uuid.uuidString.lowercased(),
+                                "value": dataValue
+                            ])
+
+                            dataValue = rest
+                        }   
+                    }
+                }
             }
         }
     }
@@ -1125,7 +1185,7 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
             }
             if stopNotificationCallbacks[key] != nil {
                 invokeAndClearDictionary(&stopNotificationCallbacks, withKey: key, usingParameters: [error])
-            }
+            }         
         } else {
             if characteristic.isNotifying {
                 if BleManager.verboseLogging {
@@ -1141,7 +1201,7 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
                 }
                 if stopNotificationCallbacks[key] != nil {
                     invokeAndClearDictionary(&stopNotificationCallbacks, withKey: key, usingParameters: [])
-                }
+                }              
             }
         }
     }
