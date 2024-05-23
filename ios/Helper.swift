@@ -361,3 +361,47 @@ extension CBPeripheral {
         return self.identifier.uuidString.lowercased()
     }
 }
+
+class NotifyBufferContainer {
+    public var items: Data
+    private var capacity: Int
+    private var count: Int
+
+    init(bufferSize: Int) {
+        self.items = Data(count: 0)
+        self.capacity = bufferSize
+        self.count = 0
+    }
+
+    func resetBuffer() {
+        self.items.removeAll(keepingCapacity: true)
+        self.count = 0
+    }
+
+    func put(_ value: Data) -> Data {
+        var toInsert: Data
+        var rest: Data = Data()
+        
+        let remainingCapacity = self.capacity - self.count 
+        if value.count > remainingCapacity {
+            let restLength = value.count - remainingCapacity
+            rest = value.suffix(restLength)
+            toInsert = value.prefix(remainingCapacity)
+        } else {
+            toInsert = value
+        }
+        
+        self.items.append(toInsert)
+        self.count += toInsert.count
+        
+        return rest
+    }
+
+    func isBufferFull() -> Bool {
+        return self.count >= self.capacity
+    }
+
+    func size() -> Int {
+        return self.capacity
+    }
+}
