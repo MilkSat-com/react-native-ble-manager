@@ -363,35 +363,35 @@ extension CBPeripheral {
 }
 
 class NotifyBufferContainer {
-    public var items: Data
+    public var items: [NSNumber]
     private var capacity: Int
     private var count: Int
 
     init(bufferSize: Int) {
-        self.items = Data(count: 0)
+        self.items = []
         self.capacity = bufferSize
         self.count = 0
     }
 
     func resetBuffer() {
-        self.items.removeAll(keepingCapacity: true)
+        self.items.removeAll()
         self.count = 0
     }
 
-    func put(_ value: Data) -> Data {
-        var toInsert: Data
-        var rest: Data = Data()
+    func put(_ value: [NSNumber]) -> Data {
+        var toInsert: [NSNumber]
+        var rest: [NSNumber] = []
         
         let remainingCapacity = self.capacity - self.count 
         if value.count > remainingCapacity {
             let restLength = value.count - remainingCapacity
-            rest = value.suffix(restLength)
-            toInsert = value.prefix(remainingCapacity)
+            rest = Array(value.suffix(restLength))
+            toInsert = Array(value.prefix(remainingCapacity))
         } else {
             toInsert = value
         }
         
-        self.items.append(toInsert)
+        self.items.append(contentsOf: toInsert)
         self.count += toInsert.count
         
         return rest

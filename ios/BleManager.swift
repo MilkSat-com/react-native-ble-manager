@@ -1114,39 +1114,38 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
             if hasListeners {
                 var buffer = bufferedCharacteristics[bufferedCharacteristicsKey(serviceUUID: characteristic.service!.uuid.uuidString, characteristicUUID: characteristic.uuid.uuidString)]
                 var dataValue = characteristic.value!.toArray()
-                if var dataValue = dataValue { 
-                    if (buffer == nil) {
-                        sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
-                                "peripheral": peripheral.uuidAsString(),
-                                "characteristic": characteristic.uuid.uuidString.lowercased(),
-                                "service": characteristic.service!.uuid.uuidString.lowercased(),
-                                "value": dataValue
-                            ])                    
-                    } else {
-                        while !dataValue.isEmpty {  
-                            var rest: Data = Data()
 
-                            if (buffer != nil) {
-                                rest = buffer.put(dataValue)
-                                if buffer.isBufferFull() {
-                                    // fetch and reset
-                                    dataValue = buffer.items
-                                    buffer.resetBuffer()
-                                } else {
-                                    break
-                                }
+                if (buffer == nil) {
+                    sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
+                            "peripheral": peripheral.uuidAsString(),
+                            "characteristic": characteristic.uuid.uuidString.lowercased(),
+                            "service": characteristic.service!.uuid.uuidString.lowercased(),
+                            "value": dataValue
+                        ])                    
+                } else {
+                    while !dataValue.isEmpty {  
+                        var rest: [NSNumber] = []
+
+                        if (buffer != nil) {
+                            rest = buffer.put(dataValue)
+                            if buffer.isBufferFull() {
+                                // fetch and reset
+                                dataValue = buffer.items
+                                buffer.resetBuffer()
+                            } else {
+                                break
                             }
+                        }
 
-                            sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
-                                "peripheral": peripheral.uuidAsString(),
-                                "characteristic": characteristic.uuid.uuidString.lowercased(),
-                                "service": characteristic.service!.uuid.uuidString.lowercased(),
-                                "value": dataValue
-                            ])
+                        sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
+                            "peripheral": peripheral.uuidAsString(),
+                            "characteristic": characteristic.uuid.uuidString.lowercased(),
+                            "service": characteristic.service!.uuid.uuidString.lowercased(),
+                            "value": dataValue
+                        ])
 
-                            dataValue = rest
-                        }   
-                    }
+                        dataValue = rest
+                    }   
                 }
             }
         }
