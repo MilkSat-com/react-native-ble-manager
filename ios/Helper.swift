@@ -378,7 +378,7 @@ class NotifyBufferContainer {
         self.count = 0
     }
 
-    func put(_ value: [NSNumber]) -> Data {
+    func put(_ value: [NSNumber]) -> [NSNumber] {
         var toInsert: [NSNumber]
         var rest: [NSNumber] = []
         
@@ -404,4 +404,4 @@ class NotifyBufferContainer {
     func size() -> Int {
         return self.capacity
     }
-}
+}   
