@@ -318,6 +318,12 @@ class BleManager extends NativeEventEmitter {
     });
   }
 
+  /**
+   * @param peripheralId
+   * @param serviceUUID
+   * @param characteristicUUID
+   * @returns
+   */
   startNotification(
     peripheralId: string,
     serviceUUID: string,
@@ -340,7 +346,6 @@ class BleManager extends NativeEventEmitter {
   }
 
   /**
-   * [Android only]
    * @param peripheralId
    * @param serviceUUID
    * @param characteristicUUID
@@ -685,13 +690,15 @@ class BleManager extends NativeEventEmitter {
    */
   getAssociatedPeripherals() {
     return new Promise<Peripheral[]>((fulfill, reject) => {
-      bleManager.getAssociatedPeripherals((error: string | null, peripherals: Peripheral[] | null) => {
-        if (error) {
-          reject(error);
-        } else {
-          fulfill(peripherals || []);
+      bleManager.getAssociatedPeripherals(
+        (error: string | null, peripherals: Peripheral[] | null) => {
+          if (error) {
+            reject(error);
+          } else {
+            fulfill(peripherals || []);
+          }
         }
-      });
+      );
     });
   }
 
@@ -703,13 +710,16 @@ class BleManager extends NativeEventEmitter {
    */
   removeAssociatedPeripheral(peripheralId: string) {
     return new Promise<void>((fulfill, reject) => {
-      bleManager.removeAssociatedPeripheral(peripheralId, (error: string | null) => {
-        if (error !== null) {
-          reject(error);
-        } else {
-          fulfill();
+      bleManager.removeAssociatedPeripheral(
+        peripheralId,
+        (error: string | null) => {
+          if (error !== null) {
+            reject(error);
+          } else {
+            fulfill();
+          }
         }
-      });
+      );
     });
   }
 
@@ -721,7 +731,7 @@ class BleManager extends NativeEventEmitter {
    * @return Promise resolving to a boolean.
    */
   supportsCompanion() {
-    return new Promise<boolean>(fulfill => {
+    return new Promise<boolean>((fulfill) => {
       bleManager.supportsCompanion((supports: boolean) => fulfill(supports));
     });
   }
@@ -731,18 +741,19 @@ class BleManager extends NativeEventEmitter {
    *
    * Start companion scan.
    */
-  companionScan(
-    serviceUUIDs: string[],
-    options: CompanionScanOptions = {}
-  ) {
+  companionScan(serviceUUIDs: string[], options: CompanionScanOptions = {}) {
     return new Promise<Peripheral | null>((fulfill, reject) => {
-      bleManager.companionScan(serviceUUIDs, options, (error: string | null, peripheral: Peripheral | null) => {
-        if (error) {
-          reject(error)
-        } else {
-          fulfill(peripheral);
+      bleManager.companionScan(
+        serviceUUIDs,
+        options,
+        (error: string | null, peripheral: Peripheral | null) => {
+          if (error) {
+            reject(error);
+          } else {
+            fulfill(peripheral);
+          }
         }
-      });
+      );
     });
   }
 

@@ -113,8 +113,8 @@ See: https://developer.android.com/develop/connectivity/bluetooth/companion-devi
 **Examples**
 
 ```js
-BleManager.compationScan([]).then(peripheral => {
-  console.log('Associated peripheral', peripheral);
+BleManager.compationScan([]).then((peripheral) => {
+  console.log("Associated peripheral", peripheral);
 });
 ```
 
@@ -256,7 +256,7 @@ BleManager.startNotification(
 
 ---
 
-## startNotificationUseBuffer(peripheralId, serviceUUID, characteristicUUID, buffer) [Android only]
+## startNotificationUseBuffer(peripheralId, serviceUUID, characteristicUUID, buffer)
 
 Start the notification on the specified characteristic, you need to call `retrieveServices` method before. The buffer collect messages until the buffer of messages bytes reaches the limit defined with the `buffer` argument and then emit all the collected data. Helpful to reducing the number or js bridge crossings when a characteristic is sending a lot of messages.
 Returns a `Promise` object.
