@@ -1126,7 +1126,7 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
                     while !dataValue.isEmpty {  
                         var rest: [NSNumber] = []
 
-                        if (buffer != nil) {
+                        if let buffer = buffer {
                             rest = buffer.put(dataValue)
                             if buffer.isBufferFull() {
                                 // fetch and reset
