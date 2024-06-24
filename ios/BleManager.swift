@@ -123,14 +123,17 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
     // Helper method to call the callbacks for a specific peripheral and clear the queue
     func invokeAndClearDictionary(_ dictionary: inout Dictionary<String, [RCTResponseSenderBlock]>, withKey key: String, usingParameters parameters: [Any]) {
         serialQueue.sync {
-            
-            if let peripheralCallbacks = dictionary[key] {
-                for callback in peripheralCallbacks {
-                    callback(parameters)
-                }
-                
-                dictionary.removeValue(forKey: key)
+            invokeAndClearDictionary_THREAD_UNSAFE(&dictionary, withKey: key, usingParameters: parameters)
+        }
+    }
+
+    func invokeAndClearDictionary_THREAD_UNSAFE(_ dictionary: inout Dictionary<String, [RCTResponseSenderBlock]>, withKey key: String, usingParameters parameters: [Any]) {
+        if let peripheralCallbacks = dictionary[key] {
+            for callback in peripheralCallbacks {
+                callback(parameters)
             }
+            
+            dictionary.removeValue(forKey: key)
         }
     }
     
@@ -1108,44 +1111,46 @@ class BleManager: RCTEventEmitter, CBCentralManagerDelegate, CBPeripheralDelegat
             NSLog("Read value [\(characteristic.uuid)]: \( value.hexadecimalString())")
         }
         
-        if readCallbacks[key] != nil {
-            invokeAndClearDictionary(&readCallbacks, withKey: key, usingParameters: [NSNull(), characteristic.value!.toArray()])
-        } else {
-            if hasListeners {
-                var buffer = bufferedCharacteristics[bufferedCharacteristicsKey(serviceUUID: characteristic.service!.uuid.uuidString, characteristicUUID: characteristic.uuid.uuidString)]
-                var dataValue = characteristic.value!.toArray()
+        serialQueue.sync {
+            if readCallbacks[key] != nil {
+                invokeAndClearDictionary_THREAD_UNSAFE(&readCallbacks, withKey: key, usingParameters: [NSNull(), characteristic.value!.toArray()])
+            } else {
+                if hasListeners {
+                    var buffer = bufferedCharacteristics[bufferedCharacteristicsKey(serviceUUID: characteristic.service!.uuid.uuidString, characteristicUUID: characteristic.uuid.uuidString)]
+                    var dataValue = characteristic.value!.toArray()
 
-                if (buffer == nil) {
-                    sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
-                            "peripheral": peripheral.uuidAsString(),
-                            "characteristic": characteristic.uuid.uuidString.lowercased(),
-                            "service": characteristic.service!.uuid.uuidString.lowercased(),
-                            "value": dataValue
-                        ])                    
-                } else {
-                    while !dataValue.isEmpty {  
-                        var rest: [NSNumber] = []
-
-                        if let buffer = buffer {
-                            rest = buffer.put(dataValue)
-                            if buffer.isBufferFull() {
-                                // fetch and reset
-                                dataValue = buffer.items
-                                buffer.resetBuffer()
-                            } else {
-                                break
-                            }
-                        }
-
+                    if (buffer == nil) {
                         sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
-                            "peripheral": peripheral.uuidAsString(),
-                            "characteristic": characteristic.uuid.uuidString.lowercased(),
-                            "service": characteristic.service!.uuid.uuidString.lowercased(),
-                            "value": dataValue
-                        ])
+                                "peripheral": peripheral.uuidAsString(),
+                                "characteristic": characteristic.uuid.uuidString.lowercased(),
+                                "service": characteristic.service!.uuid.uuidString.lowercased(),
+                                "value": dataValue
+                            ])                    
+                    } else {
+                        while !dataValue.isEmpty {  
+                            var rest: [NSNumber] = []
 
-                        dataValue = rest
-                    }   
+                            if let buffer = buffer {
+                                rest = buffer.put(dataValue)
+                                if buffer.isBufferFull() {
+                                    // fetch and reset
+                                    dataValue = buffer.items
+                                    buffer.resetBuffer()
+                                } else {
+                                    break
+                                }
+                            }
+
+                            sendEvent(withName: "BleManagerDidUpdateValueForCharacteristic", body: [
+                                "peripheral": peripheral.uuidAsString(),
+                                "characteristic": characteristic.uuid.uuidString.lowercased(),
+                                "service": characteristic.service!.uuid.uuidString.lowercased(),
+                                "value": dataValue
+                            ])
+
+                            dataValue = rest
+                        }   
+                    }
                 }
             }
         }
